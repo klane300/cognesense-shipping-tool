@@ -156,7 +156,7 @@ module.exports = async (req, res) => {
       } else if (packages.length > 1) {
         reason = "EasyPost returned rates for each package (raw counts: " + rawCounts + "), but no carrier + service was offered for every package, so nothing could be combined.";
       } else {
-        reason = "EasyPost returned 0 rates and did not report a specific carrier error. This usually means no carrier accounts are enabled on this EasyPost account yet (a fresh account normally has USPS enabled by default) or the API key is a test/sandbox key.";
+        reason = "EasyPost returned 0 rates and did not report a specific carrier error. This usually means no carrier account (e.g. a USPS Wallet account) has been added/enabled yet in your EasyPost dashboard under Carrier Accounts — new EasyPost accounts do NOT get one enabled automatically.";
       }
       res.status(502).json({ error: reason });
       return;
