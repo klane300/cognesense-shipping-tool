@@ -1,3 +1,18 @@
+// api/quote.js
+//
+// Serverless function that holds the EasyPost API key server-side and proxies
+// shipping-rate requests from the dashboard. The key lives ONLY in the
+// EASYPOST_API_KEY environment variable (set it in Vercel's dashboard under
+// Project Settings -> Environment Variables) — it is never present in this
+// file, in the frontend, or in any response body.
+//
+// EasyPost's rating API works per-parcel: one "shipment" = one box. Since our
+// dashboard supports multiple packages per quote, this function creates one
+// EasyPost shipment per package, then combines rates by matching carrier +
+// service across every package. If a given carrier/service isn't offered for
+// every package in the shipment (e.g. one box is too large for that service),
+// that option is dropped from the combined list rather than silently
+// under-quoting it.
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
