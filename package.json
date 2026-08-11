@@ -1,0 +1,9 @@
+{
+  "name": "cognesense-shipping-quote-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cognesense shipping quote dashboard with a Vercel serverless function that proxies live EasyPost rates.",
+  "engines": {
+    "node": ">=18"
+  }
+}
