@@ -1,18 +1,3 @@
-// api/quote.js
-//
-// Serverless function that holds the EasyPost API key server-side and proxies
-// shipping-rate requests from the dashboard. The key lives ONLY in the
-// EASYPOST_API_KEY environment variable (set it in Vercel's dashboard under
-// Project Settings -> Environment Variables) — it is never present in this
-// file, in the frontend, or in any response body.
-//
-// EasyPost's rating API works per-parcel: one "shipment" = one box. Since our
-// dashboard supports multiple packages per quote, this function creates one
-// EasyPost shipment per package, then combines rates by matching carrier +
-// service across every package. If a given carrier/service isn't offered for
-// every package in the shipment (e.g. one box is too large for that service),
-// that option is dropped from the combined list rather than silently
-// under-quoting it.
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -53,8 +38,10 @@ module.exports = async (req, res) => {
 
   try {
     const perPackageRates = [];
+    const allCarrierMessages = [];
 
-    for (const pkg of packages) {
+    for (let i = 0; i < packages.length; i++) {
+      const pkg = packages[i];
       const shipmentBody = {
         shipment: {
           from_address: {
@@ -96,6 +83,19 @@ module.exports = async (req, res) => {
         return;
       }
 
+      // EasyPost includes a "messages" array on the shipment with per-carrier
+      // errors (e.g. a carrier account isn't set up, or an address is
+      // insufficient for that carrier) even when the request itself succeeds.
+      // These are the actual reason a carrier produced no rate, so surface
+      // them instead of a generic "no rates" message.
+      if (Array.isArray(epData.messages) && epData.messages.length) {
+        for (const m of epData.messages) {
+          allCarrierMessages.push(
+            "Package " + (i + 1) + " - " + (m.carrier || "unknown carrier") + ": " + (m.message || m.type || "rate error")
+          );
+        }
+      }
+
       perPackageRates.push(epData.rates || []);
     }
 
@@ -133,7 +133,21 @@ module.exports = async (req, res) => {
 
     combined.sort((a, b) => a.total - b.total);
 
-    res.status(200).json({ rates: combined, packageCount: packages.length });
+    if (combined.length === 0) {
+      const rawCounts = perPackageRates.map((r) => r.length).join(", ");
+      let reason;
+      if (allCarrierMessages.length) {
+        reason = "EasyPost carrier errors: " + allCarrierMessages.join(" | ");
+      } else if (packages.length > 1) {
+        reason = "EasyPost returned rates for each package (raw counts: " + rawCounts + "), but no carrier + service was offered for every package, so nothing could be combined.";
+      } else {
+        reason = "EasyPost returned 0 rates and did not report a specific carrier error. This usually means no carrier accounts are enabled on this EasyPost account yet (a fresh account normally has USPS enabled by default) or the API key is a test/sandbox key.";
+      }
+      res.status(502).json({ error: reason });
+      return;
+    }
+
+    res.status(200).json({ rates: combined, packageCount: packages.length, carrierMessages: allCarrierMessages });
   } catch (err) {
     res.status(500).json({ error: err && err.message ? err.message : "Unexpected server error." });
   }
