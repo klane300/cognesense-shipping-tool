@@ -32,8 +32,37 @@
 // out rather than guessed, to avoid the API silently rejecting an unrecognized
 // enum value. If real quotes come back with errors referencing a specific
 // field, that's the signal to adjust the mapping below.
+//
+// FALLBACK: /ltl/market-options does a live sweep across many outside
+// carriers and can occasionally time out and return an empty list with
+// "retryable": true. When that happens, Warp's own response says their
+// single fast Warp-direct rate at /ltl/quote is unaffected -- so rather than
+// failing the whole request (and dropping to our local estimate) on a
+// transient timeout, this function falls back to that single rate and
+// clearly labels it as Warp-direct-only, not a full market comparison.
 
 const WARP_API_BASE = "https://www.wearewarp.com/api/v1";
+
+async function fetchWarpDirectQuote(warpBody, headers) {
+  const resp = await fetch(WARP_API_BASE + "/ltl/quote", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(warpBody)
+  });
+  const rawText = await resp.text();
+  let data = {};
+  try { data = JSON.parse(rawText); } catch (e) { /* leave data empty */ }
+  if (!resp.ok || typeof data.price_usd !== "number") return null;
+  return {
+    rank: 1,
+    priceUsd: data.price_usd,
+    transitDays: data.transit_days || null,
+    carrierName: "Warp",
+    serviceLevel: (data.service && data.service.vehicle) || "LTL",
+    isWarp: true,
+    bookable: false
+  };
+}
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -111,9 +140,25 @@ module.exports = async (req, res) => {
     }
 
     const options = Array.isArray(data.market_options) ? data.market_options : [];
+
     if (options.length === 0) {
+      // Market sweep came back empty (often a timeout, per Warp's own "retryable"
+      // flag) -- fall back to Warp's single fast rate rather than failing outright.
+      const fallback = await fetchWarpDirectQuote(warpBody, headers).catch(() => null);
+      if (fallback) {
+        res.status(200).json({
+          quotes: [fallback],
+          note: (data.note ? data.note + " " : "") +
+            "Showing Warp's direct rate only -- the full multi-carrier comparison was unavailable for this request.",
+          usedApiKey,
+          marketComparisonUnavailable: true
+        });
+        return;
+      }
       res.status(502).json({
-        error: "Warp returned no market options for this lane. Raw response: " + rawText.slice(0, 500)
+        error: "Warp returned no market options for this lane" +
+          (data.note ? " (" + data.note + ")" : "") +
+          ", and the fallback direct rate also failed. Raw response: " + rawText.slice(0, 500)
       });
       return;
     }
