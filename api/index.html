@@ -453,8 +453,7 @@
     <div>
       <strong>These are estimated quotes, not live carrier rates.</strong>
       The tool uses dimensional weight, zone, and surcharge logic modeled on typical UPS/FedEx/USPS/DHL pricing to
-      give you a good ballpark for customers. Connect a live rate API (EasyPost, Shippo, or ShipEngine) to pull
-      real-time carrier rates &mdash; see the note at the bottom of the page for what that involves.
+      give you a good ballpark for customers. Turn on "Use live EasyPost rates" below for real-time carrier rates.
     </div>
   </div>
 
@@ -466,6 +465,22 @@
       <div class="card" id="shipDetailsCard">
         <h2>Shipment details</h2>
         <p class="subhead">Where it's coming from and going to.</p>
+
+        <div class="field-row two">
+          <div class="field">
+            <label>Shipment type</label>
+            <select id="shipmentType">
+              <option value="parcel" selected>Small parcel</option>
+              <option value="freight">Freight / LTL (pallets)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div id="shipmentTypeHint" style="font-size:12px; color:var(--muted); padding-top:6px;">
+              Individual boxes, rated by USPS/FedEx/UPS-style carriers.
+            </div>
+          </div>
+        </div>
 
         <div class="field-row two">
           <div class="field">
@@ -483,7 +498,7 @@
 
         <div class="field-row two">
           <div class="field">
-            <label>Origin city (optional, improves live accuracy)</label>
+            <label>Origin city (required for live rates)</label>
             <input type="text" id="originCity" placeholder="e.g. Chicago">
           </div>
           <div class="field">
@@ -512,7 +527,7 @@
 
         <div class="field-row two">
           <div class="field">
-            <label>Destination city (optional, improves live accuracy)</label>
+            <label>Destination city (required for live rates)</label>
             <input type="text" id="destCity" placeholder="e.g. San Francisco">
           </div>
           <div class="field">
@@ -602,15 +617,89 @@
         <button class="btn btn-secondary" id="addPkgBtn" type="button">+ Add another package</button>
       </div>
 
+      <div class="card" id="palletsCard" style="display:none;">
+        <h2>Pallets</h2>
+        <p class="subhead">Add one row per pallet/skid &mdash; LTL carriers price the whole shipment together, not per pallet.</p>
+
+        <div id="palletList"></div>
+
+        <button class="btn btn-secondary" id="addPalletBtn" type="button">+ Add another pallet</button>
+      </div>
+
+      <div class="card" id="freightDetailsCard" style="display:none; margin-top:18px;">
+        <h2>Freight details</h2>
+        <p class="subhead">These drive LTL pricing beyond weight and distance. Estimate only &mdash; see note below.</p>
+
+        <div class="field-row two">
+          <div class="field">
+            <label>Requested pickup date</label>
+            <input type="date" id="pickupDate">
+          </div>
+          <div class="field">
+            <label>Commodity / what's being shipped (optional)</label>
+            <input type="text" id="freightCommodity" placeholder="e.g. packaged electronics">
+          </div>
+        </div>
+
+        <div class="field-row two">
+          <div class="field">
+            <label>Freight class</label>
+            <select id="freightClass">
+              <option value="50">50 &mdash; Dense, sturdy (steel, machinery parts)</option>
+              <option value="65">65 &mdash; Machinery, boxed goods</option>
+              <option value="85">85 &mdash; Crated machinery, auto parts</option>
+              <option value="100" selected>100 &mdash; Wooden crates, general freight</option>
+              <option value="125">125 &mdash; Plywood, small appliances</option>
+              <option value="150">150 &mdash; Auto sheet metal, mixed pallets</option>
+              <option value="200">200 &mdash; Sheet metal, refrigerators</option>
+              <option value="250">250 &mdash; Bulky, low-density (mattresses, couches)</option>
+              <option value="300">300 &mdash; Very bulky, light (wood cabinets)</option>
+              <option value="400">400 &mdash; Very light, bulky (ping pong balls)</option>
+              <option value="500">500 &mdash; Extremely light/bulky, high value</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Estimated density (rough guide)</label>
+            <div id="densityHint" style="padding-top:8px; font-size:12.5px; color:var(--muted);">Add pallets to estimate density.</div>
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="nonStackable">
+          <label for="nonStackable">Non-stackable (takes double floor space)</label>
+          <input type="checkbox" id="insideDelivery">
+          <label for="insideDelivery">Inside delivery</label>
+        </div>
+        <div class="checkbox-row" style="margin-top:8px;">
+          <input type="checkbox" id="limitedAccess">
+          <label for="limitedAccess">Limited-access pickup/delivery (construction site, military base, etc.)</label>
+        </div>
+
+        <p style="font-size:12.5px; color:var(--muted); margin:12px 0 8px;">
+          Liftgate/appointment delivery, Saturday delivery, hazmat, and residential destination above still apply and
+          are priced at freight-appropriate rates in the estimate below.
+        </p>
+
+        <div class="checkbox-row" style="margin-top:8px;">
+          <input type="checkbox" id="freightLiveModeToggle">
+          <label for="freightLiveModeToggle"><strong>Use live Warp freight rates</strong> &mdash; requires the backend below to be deployed</label>
+        </div>
+        <p id="freightLiveModeHint" class="subhead" style="margin:8px 0 0;">
+          Off: uses the built-in freight estimate engine. On: calls the deployed <code class="mono">/api/freight-quote</code>
+          endpoint for a real LTL quote from Warp. Freight class, non-stackable, and inside delivery above are used
+          for the estimate only &mdash; Warp's live quote determines class/pricing on its own from weight, dimensions,
+          and the accessorials it recognizes (liftgate, residential, limited-access).
+        </p>
+      </div>
+
       <div class="card" id="liveModeCard" style="margin-top:18px;">
         <div class="checkbox-row" style="margin-top:0;">
           <input type="checkbox" id="liveModeToggle">
           <label for="liveModeToggle"><strong>Use live EasyPost rates</strong> &mdash; requires the backend below to be deployed</label>
         </div>
         <p id="liveModeHint" class="subhead" style="margin:8px 0 0;">
-          Off: uses the built-in estimate engine (works anywhere, no setup). On: calls your deployed
-          <code class="mono">/api/quote</code> endpoint for real carrier rates &mdash; see the "Going live" section
-          at the bottom of the page for deploy steps.
+          Off: uses the built-in estimate engine (works anywhere, no setup). On: calls the deployed
+          <code class="mono">/api/quote</code> endpoint for real carrier rates.
         </p>
       </div>
 
@@ -648,27 +737,6 @@
     </div>
   </div>
 
-  <div class="card" style="margin-top:22px;">
-    <h2>Going live with real EasyPost rates</h2>
-    <p class="subhead" style="margin-bottom:10px;">This page ships with a matching backend &mdash; deploy it once, then flip the toggle above.</p>
-    <p style="font-size:13.5px; color:var(--ink); margin:0 0 8px;">
-      This HTML file can't safely call EasyPost directly &mdash; that would expose your API key to anyone who opens
-      the page. It's built to work alongside a small serverless function (<code class="mono">/api/quote</code>) that
-      holds the key server-side. You received this file inside a project folder with that function already written;
-      deploy the whole folder to Vercel (free tier is fine):
-    </p>
-    <ol style="font-size:13.5px; color:var(--ink); margin:0 0 10px; padding-left:20px;">
-      <li>Install the Vercel CLI (<code class="mono">npm i -g vercel</code>) or use the Vercel dashboard's "Import Project."</li>
-      <li>From the project folder, run <code class="mono">vercel</code> and follow the prompts to create the project.</li>
-      <li>In the Vercel dashboard &rarr; Project Settings &rarr; Environment Variables, add <code class="mono">EASYPOST_API_KEY</code> with your real key (never in code, never in this chat).</li>
-      <li>Redeploy with <code class="mono">vercel --prod</code>, then open the deployed URL and turn on "Use live EasyPost rates."</li>
-    </ol>
-    <p style="font-size:13.5px; color:var(--muted); margin:0;">
-      Full details are in the project's README.md. With the toggle off, this page keeps working standalone with the
-      built-in estimate engine (dimensional divisor, zone tiers, fuel surcharge %, accessorial fees) &mdash; a ballpark
-      for customer-facing quotes, not a binding rate.
-    </p>
-  </div>
 
 </main>
 
@@ -710,6 +778,8 @@
   // ---------- State ----------
   let pkgCount = 0;
   const packages = {}; // id -> {length,width,height,weight}
+  let palletCount = 0;
+  const pallets = {}; // id -> {length,width,height,weight}
   const history = [];
   let lastQuoteSet = null;
   let lastInputs = null;
@@ -847,6 +917,103 @@
     };
   }
 
+  // ---------- Freight / LTL estimate engine ----------
+  // Illustrative only — there is no live LTL rate feed. Ratios are loosely modeled on
+  // typical LTL pricing structure (class-based CWT rate x distance zone, fuel surcharge %,
+  // flat accessorials, and a per-shipment minimum charge) and should be treated the same
+  // way as the parcel estimate engine above: a customer-facing ballpark, not a quote to bind on.
+
+  const FREIGHT_SERVICE_TIERS = [
+    { key: "standard",   label: "Standard LTL",           eta: "3-7 business days",      mult: 1.0 },
+    { key: "guaranteed", label: "Guaranteed LTL (by 5pm)", eta: "Guaranteed delivery date", mult: 1.55 }
+  ];
+
+  // Class multipliers relative to class 100 (a common general-freight baseline).
+  const FREIGHT_CLASS_MULT = {
+    50: 0.62, 65: 0.72, 85: 0.86, 100: 1.0, 125: 1.22, 150: 1.38,
+    200: 1.81, 250: 2.15, 300: 2.62, 400: 3.31, 500: 4.31
+  };
+
+  const FREIGHT_ZONE_MULT = { 2: 1.0, 3: 1.15, 4: 1.35, 5: 1.55, 6: 1.8, 7: 2.05, 8: 2.35 };
+
+  const BASE_CWT_RATE = 34;          // $ per 100 lb, class 100, zone 2 — illustrative, update periodically
+  const FREIGHT_FUEL_SURCHARGE_PCT = 0.32; // LTL fuel surcharges typically run higher than parcel
+  const FREIGHT_MIN_CHARGE = 185;    // most LTL carriers have a per-shipment minimum
+
+  const FREIGHT_LIFTGATE_SURCHARGE = 95;
+  const FREIGHT_RESIDENTIAL_SURCHARGE = 135;
+  const FREIGHT_INSIDE_DELIVERY_SURCHARGE = 85;
+  const FREIGHT_LIMITED_ACCESS_SURCHARGE = 110;
+  const FREIGHT_NONSTACKABLE_SURCHARGE = 45;
+  const FREIGHT_HAZMAT_SURCHARGE = 135;
+  const FREIGHT_SATURDAY_SURCHARGE = 90;
+
+  // Very rough density -> typical class guide, for the on-screen hint only (user still picks the class).
+  function densityClassHint(pcf) {
+    if (pcf == null) return "Add pallets to estimate density.";
+    if (pcf >= 30) return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~50 (very dense)";
+    if (pcf >= 15) return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~60–65";
+    if (pcf >= 10) return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~70–85";
+    if (pcf >= 6)  return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~92.5–100";
+    if (pcf >= 4)  return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~110–125";
+    if (pcf >= 2)  return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~150–175";
+    if (pcf >= 1)  return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~200–250";
+    return "≈ " + pcf.toFixed(1) + " lb/ft³ → typically class ~300+";
+  }
+
+  function computeFreightQuote(inputs) {
+    const { pallets: plts, unit, originZip, destZip, originCountry, destCountry, destinationType,
+            hazmat, saturday, liftgate, freightClass, nonStackable, insideDelivery, limitedAccess,
+            declaredValue } = inputs;
+    const residential = destinationType === "residential";
+    const isIntl = destCountry !== originCountry;
+    const zone = estimateDomesticZone(originZip, destZip);
+
+    let totalWeight = 0, totalCubicFt = 0;
+    plts.forEach(p => {
+      totalWeight += toLbs(p.weight, unit);
+      const L = toInches(p.length, unit), W = toInches(p.width, unit), H = toInches(p.height, unit);
+      totalCubicFt += (L * W * H) / 1728;
+    });
+    const density = totalCubicFt > 0 ? totalWeight / totalCubicFt : null;
+
+    const cwt = totalWeight / 100;
+    const classMult = FREIGHT_CLASS_MULT[freightClass] || 1.0;
+    const zoneMult = FREIGHT_ZONE_MULT[zone] || 1.8;
+    const linehaul = BASE_CWT_RATE * cwt * classMult * zoneMult;
+
+    const quotes = FREIGHT_SERVICE_TIERS.map(tier => {
+      const tierLinehaul = Math.max(linehaul * tier.mult, FREIGHT_MIN_CHARGE);
+      const fuel = tierLinehaul * FREIGHT_FUEL_SURCHARGE_PCT;
+
+      let surcharges = 0;
+      const surchargeLines = [];
+      if (residential) { surcharges += FREIGHT_RESIDENTIAL_SURCHARGE; surchargeLines.push(["Residential delivery", FREIGHT_RESIDENTIAL_SURCHARGE]); }
+      if (liftgate) { surcharges += FREIGHT_LIFTGATE_SURCHARGE; surchargeLines.push(["Liftgate / appointment delivery", FREIGHT_LIFTGATE_SURCHARGE]); }
+      if (insideDelivery) { surcharges += FREIGHT_INSIDE_DELIVERY_SURCHARGE; surchargeLines.push(["Inside delivery", FREIGHT_INSIDE_DELIVERY_SURCHARGE]); }
+      if (limitedAccess) { surcharges += FREIGHT_LIMITED_ACCESS_SURCHARGE; surchargeLines.push(["Limited-access pickup/delivery", FREIGHT_LIMITED_ACCESS_SURCHARGE]); }
+      if (nonStackable) { surcharges += FREIGHT_NONSTACKABLE_SURCHARGE; surchargeLines.push(["Non-stackable handling", FREIGHT_NONSTACKABLE_SURCHARGE]); }
+      if (hazmat) { surcharges += FREIGHT_HAZMAT_SURCHARGE; surchargeLines.push(["Hazmat fee", FREIGHT_HAZMAT_SURCHARGE]); }
+      if (saturday) { surcharges += FREIGHT_SATURDAY_SURCHARGE; surchargeLines.push(["Saturday delivery/pickup", FREIGHT_SATURDAY_SURCHARGE]); }
+
+      let insurance = 0;
+      if (declaredValue > 100) {
+        insurance = (declaredValue - 100) * 0.009;
+        surchargeLines.push(["Declared value coverage", insurance]);
+      }
+
+      const total = tierLinehaul + fuel + surcharges + insurance;
+
+      return {
+        key: tier.key, label: tier.label, eta: tier.eta,
+        base: tierLinehaul, fuel, fuelPct: FREIGHT_FUEL_SURCHARGE_PCT,
+        surcharges, surchargeLines, insurance, total
+      };
+    });
+
+    return { isIntl, zone, totalWeight: Math.ceil(totalWeight), totalCubicFt, density, palletCount: plts.length, quotes };
+  }
+
   // ---------- Package rows UI ----------
 
   function addPackageRow(prefill) {
@@ -907,6 +1074,117 @@
   document.getElementById("originCountry").addEventListener("change", updateCustomsVisibility);
   document.getElementById("destCountry").addEventListener("change", updateCustomsVisibility);
   updateCustomsVisibility();
+
+  // ---------- Pallet rows UI (freight/LTL mode) ----------
+
+  function updateDensityHint() {
+    const hint = document.getElementById("densityHint");
+    if (!hint) return;
+    const unit = document.getElementById("unitSystem").value;
+    const plts = Object.values(pallets);
+    if (!plts.length) { hint.textContent = "Add pallets to estimate density."; return; }
+    let totalWeight = 0, totalCubicFt = 0;
+    plts.forEach(p => {
+      totalWeight += toLbs(p.weight, unit);
+      const L = toInches(p.length, unit), W = toInches(p.width, unit), H = toInches(p.height, unit);
+      totalCubicFt += (L * W * H) / 1728;
+    });
+    const density = totalCubicFt > 0 ? totalWeight / totalCubicFt : null;
+    hint.textContent = densityClassHint(density);
+  }
+
+  function addPalletRow(prefill) {
+    palletCount += 1;
+    const id = "plt" + palletCount;
+    pallets[id] = prefill || { length: 48, width: 40, height: 48, weight: 500 };
+
+    const wrap = document.createElement("div");
+    wrap.className = "pkg-card";
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="pkg-title">
+        <span>Pallet ${palletCount}</span>
+        <button type="button" class="pkg-remove" data-remove="${id}">Remove</button>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Length</label>
+          <input type="number" min="0" step="0.5" data-field="length" data-plt="${id}" value="${pallets[id].length}">
+        </div>
+        <div class="field">
+          <label>Width</label>
+          <input type="number" min="0" step="0.5" data-field="width" data-plt="${id}" value="${pallets[id].width}">
+        </div>
+        <div class="field">
+          <label>Height</label>
+          <input type="number" min="0" step="0.5" data-field="height" data-plt="${id}" value="${pallets[id].height}">
+        </div>
+        <div class="field">
+          <label>Weight</label>
+          <input type="number" min="0" step="0.5" data-field="weight" data-plt="${id}" value="${pallets[id].weight}">
+        </div>
+      </div>
+    `;
+    document.getElementById("palletList").appendChild(wrap);
+
+    wrap.querySelector('[data-remove="' + id + '"]').addEventListener("click", function () {
+      delete pallets[id];
+      wrap.remove();
+      updateDensityHint();
+    });
+
+    wrap.querySelectorAll("input[data-field]").forEach(inp => {
+      inp.addEventListener("input", function () {
+        const pid = this.getAttribute("data-plt");
+        const field = this.getAttribute("data-field");
+        pallets[pid][field] = parseFloat(this.value) || 0;
+        updateDensityHint();
+      });
+    });
+
+    updateDensityHint();
+  }
+
+  document.getElementById("addPalletBtn").addEventListener("click", function () {
+    addPalletRow();
+  });
+
+  // seed with one pallet (typical 48x40 pallet footprint)
+  addPalletRow();
+
+  // Default the pickup date to a few days out so it's always a valid future date.
+  (function seedPickupDate() {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    document.getElementById("pickupDate").value = d.toISOString().slice(0, 10);
+  })();
+
+  // ---------- Shipment type toggle (parcel vs freight/LTL) ----------
+
+  const shipmentTypeSelect = document.getElementById("shipmentType");
+  const shipmentTypeHint = document.getElementById("shipmentTypeHint");
+
+  function setShipmentTypeUI(type) {
+    const isFreight = type === "freight";
+    document.getElementById("packagesCard").style.display = isFreight ? "none" : "";
+    document.getElementById("palletsCard").style.display = isFreight ? "" : "none";
+    document.getElementById("freightDetailsCard").style.display = isFreight ? "" : "none";
+    document.getElementById("liveModeCard").style.display = isFreight ? "none" : "";
+    shipmentTypeHint.textContent = isFreight
+      ? "Pallets/skids, priced together as one LTL shipment."
+      : "Individual boxes, rated by USPS/FedEx/UPS-style carriers.";
+
+    if (isFreight) {
+      liveModeToggle.checked = false;
+      setFreightModeUI(freightLiveModeToggle.checked);
+    } else {
+      setModeUI(liveModeToggle.checked);
+    }
+  }
+
+  shipmentTypeSelect.addEventListener("change", function () {
+    setShipmentTypeUI(this.value);
+  });
 
   // ---------- Rendering ----------
 
@@ -999,6 +1277,203 @@
     `).join("");
   }
 
+  function renderFreightQuotes(result) {
+    const container = document.getElementById("quoteOptions");
+    container.innerHTML = "";
+
+    result.quotes.forEach((q, idx) => {
+      const div = document.createElement("div");
+      div.className = "quote-option" + (idx === 0 ? " selected" : "");
+      div.dataset.key = q.key;
+      div.innerHTML = `
+        <div class="qo-left">
+          <div class="qo-service">${q.label}</div>
+          <div class="qo-eta">Est. delivery: ${q.eta}</div>
+        </div>
+        <div class="qo-price">${fmt(q.total)}</div>
+      `;
+      div.addEventListener("click", function () {
+        container.querySelectorAll(".quote-option").forEach(el => el.classList.remove("selected"));
+        div.classList.add("selected");
+        renderFreightBreakdown(q, result);
+      });
+      container.appendChild(div);
+    });
+
+    if (result.quotes.length) renderFreightBreakdown(result.quotes[0], result);
+  }
+
+  function renderFreightBreakdown(q, result) {
+    document.getElementById("summaryCard").style.display = "block";
+    const table = document.getElementById("breakdownTable");
+    let rows = "";
+    rows += `<tr><td>Linehaul (class/zone-adjusted, min ${fmt(FREIGHT_MIN_CHARGE)})</td><td>${fmt(q.base)}</td></tr>`;
+    rows += `<tr><td>Fuel surcharge (${Math.round(q.fuelPct * 100)}%)</td><td>${fmt(q.fuel)}</td></tr>`;
+    q.surchargeLines.forEach(([label, amt]) => {
+      rows += `<tr><td>${label}</td><td>${fmt(amt)}</td></tr>`;
+    });
+    rows += `<tr class="total"><td>Estimated total</td><td>${fmt(q.total)}</td></tr>`;
+    table.innerHTML = rows;
+
+    const destTypeLabel = lastInputs && lastInputs.destinationType === "commercial" ? "Commercial destination" : "Residential destination";
+    const poLine = lastInputs && lastInputs.poNumber ? `<p>PO / reference: ${lastInputs.poNumber}</p>` : "";
+    const densityLine = result.density != null ? `<p>Density: ${result.density.toFixed(1)} lb/ft&sup3;</p>` : "";
+    document.getElementById("customerSummary").innerHTML = `
+      <h3>Customer-facing summary</h3>
+      <p>${q.label} &middot; Est. delivery in ${q.eta}</p>
+      <p>Domestic &middot; Zone ${result.zone} &middot; ${destTypeLabel} &middot; ${result.palletCount} pallet(s) &middot; ${result.totalWeight} lb total</p>
+      ${densityLine}
+      ${poLine}
+      <p class="big-price">${fmt(q.total)}</p>
+      <p style="color:var(--muted); font-size:12px;">Freight/LTL estimate only &mdash; not a live carrier rate. Final price depends on carrier inspection of class, weight, and accessorials at pickup.</p>
+    `;
+  }
+
+  function addFreightHistoryEntry(result, inputs) {
+    const cheapest = result.quotes[0];
+    const entry = {
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      route: inputs.originZip + " -> " + inputs.destZip + " (freight)",
+      weight: result.totalWeight,
+      cheapest: cheapest.total,
+      priciest: result.quotes[result.quotes.length - 1].total
+    };
+    history.unshift(entry);
+    renderHistory();
+  }
+
+  // ---------- Live freight rates (Warp via /api/freight-quote) ----------
+  // Warp's LTL quote endpoint returns a single price for the shipment (not a list of
+  // service tiers like EasyPost's parcel rates), so this renders as one live result
+  // rather than several selectable options.
+
+  const freightLiveModeToggle = document.getElementById("freightLiveModeToggle");
+
+  function setFreightModeUI(isLive) {
+    modeBadge.textContent = isLive ? "Live Mode" : "Estimate Mode";
+    resultsSubhead.textContent = isLive ? "Live LTL quote from Warp." : "Freight/LTL estimate.";
+    if (isLive) {
+      modeBanner.innerHTML = `
+        <div class="dot"></div>
+        <div>
+          <strong>Live mode is on.</strong> This calls your deployed <code class="mono">/api/freight-quote</code>
+          endpoint for a real LTL quote from Warp. If it's not deployed yet (or the API key isn't configured),
+          you'll see an error below and the tool will fall back to the built-in freight estimate.
+        </div>`;
+    } else {
+      modeBanner.innerHTML = `
+        <div class="dot"></div>
+        <div>
+          <strong>Freight / LTL estimate &mdash; not a live carrier rate.</strong>
+          Pricing is modeled on typical class-based LTL structure (weight, freight class, distance, fuel
+          surcharge, and accessorials). Turn on "Use live Warp freight rates" below for a real LTL quote.
+        </div>`;
+    }
+  }
+
+  freightLiveModeToggle.addEventListener("change", function () {
+    setFreightModeUI(this.checked);
+  });
+
+  async function fetchFreightLiveRates(inputs) {
+    const items = inputs.pallets.map(p => ({
+      qty: 1,
+      length_in: toInches(p.length, inputs.unit),
+      width_in: toInches(p.width, inputs.unit),
+      height_in: toInches(p.height, inputs.unit),
+      weight_lbs_per_pallet: toLbs(p.weight, inputs.unit)
+    }));
+
+    const deliveryAccessorials = [];
+    if (inputs.destinationType === "residential") deliveryAccessorials.push("residential-delivery");
+    if (inputs.liftgate) deliveryAccessorials.push("liftgate-delivery");
+    if (inputs.limitedAccess) deliveryAccessorials.push("limited-access-delivery");
+
+    const payload = {
+      originZip: inputs.originZip,
+      destZip: inputs.destZip,
+      pickupDate: inputs.pickupDate,
+      items,
+      commodity: inputs.freightCommodity || undefined,
+      stackable: !inputs.nonStackable,
+      hazmat: inputs.hazmat,
+      accessorials: { pickup: [], delivery: deliveryAccessorials }
+    };
+
+    const resp = await fetch("/api/freight-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (!resp.ok) {
+      throw new Error(data.error || ("Request failed (" + resp.status + ")"));
+    }
+    if (!data.quotes || !data.quotes.length) {
+      throw new Error("Warp returned no carrier options for this lane.");
+    }
+    return data;
+  }
+
+  function renderFreightLiveQuotes(data, inputs) {
+    const container = document.getElementById("quoteOptions");
+    container.innerHTML = "";
+
+    if (data.note) {
+      const noteDiv = document.createElement("div");
+      noteDiv.style.cssText = "background:var(--warn-bg); border:1px solid var(--warn-border); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:12px; color:var(--ink);";
+      noteDiv.innerHTML = `<strong>Warp:</strong> ${data.note}${!data.usedApiKey ? " (No WARP_API_KEY detected on this request — add one in Vercel for fuller pricing.)" : ""}`;
+      container.appendChild(noteDiv);
+    }
+
+    data.quotes.forEach((q, idx) => {
+      const div = document.createElement("div");
+      div.className = "quote-option" + (idx === 0 ? " selected" : "");
+      const etaText = q.transitDays ? ("Est. transit: " + q.transitDays + " business day(s)") : "Transit estimate not provided";
+      const warpTag = q.isWarp ? " (Warp direct)" : "";
+      div.innerHTML = `
+        <div class="qo-left">
+          <div class="qo-service">${q.carrierName}${warpTag}${q.serviceLevel ? " &mdash; " + q.serviceLevel : ""}</div>
+          <div class="qo-eta">${etaText}</div>
+        </div>
+        <div class="qo-price">${fmt(q.priceUsd)}</div>
+      `;
+      div.addEventListener("click", function () {
+        container.querySelectorAll(".quote-option").forEach(el => el.classList.remove("selected"));
+        div.classList.add("selected");
+        renderFreightLiveBreakdown(q, data, inputs);
+      });
+      container.appendChild(div);
+    });
+
+    if (data.quotes.length) renderFreightLiveBreakdown(data.quotes[0], data, inputs);
+  }
+
+  function renderFreightLiveBreakdown(quote, data, inputs) {
+    document.getElementById("summaryCard").style.display = "block";
+    const table = document.getElementById("breakdownTable");
+    table.innerHTML = `
+      <tr><td>${quote.carrierName}${quote.serviceLevel ? " " + quote.serviceLevel : ""} (live, ${inputs.pallets.length} pallet(s), ranked #${quote.rank || "?"} of ${data.quotes.length})</td><td>${fmt(quote.priceUsd)}</td></tr>
+      <tr class="total"><td>Total (live Warp market rate)</td><td>${fmt(quote.priceUsd)}</td></tr>
+    `;
+
+    const poLine = inputs.poNumber ? `<p>PO / reference: ${inputs.poNumber}</p>` : "";
+    const bookableLine = quote.bookable
+      ? "<p>Bookable now with this account.</p>"
+      : "<p style=\"color:var(--muted);\">Not yet bookable via this request &mdash; indicative pricing until authenticated/booked on Warp's site.</p>";
+    document.getElementById("customerSummary").innerHTML = `
+      <h3>Customer-facing summary</h3>
+      <p>${quote.carrierName}${quote.serviceLevel ? " " + quote.serviceLevel : ""}${quote.transitDays ? " &middot; Est. " + quote.transitDays + " business day(s)" : ""}</p>
+      <p>${inputs.originZip} &rarr; ${inputs.destZip} &middot; ${inputs.pallets.length} pallet(s)</p>
+      ${poLine}
+      <p class="big-price">${fmt(quote.priceUsd)}</p>
+      ${bookableLine}
+      <p style="color:var(--muted); font-size:12px;">Live market comparison from Warp, ${data.quotes.length} carrier option(s) &mdash; subject to confirmation at booking.</p>
+    `;
+  }
+
   // ---------- Live rates (EasyPost via /api/quote) ----------
 
   const liveModeToggle = document.getElementById("liveModeToggle");
@@ -1023,8 +1498,7 @@
         <div>
           <strong>These are estimated quotes, not live carrier rates.</strong>
           The tool uses dimensional weight, zone, and surcharge logic modeled on typical UPS/FedEx/USPS/DHL pricing to
-          give you a good ballpark for customers. Turn on "Use live EasyPost rates" above once your backend is
-          deployed &mdash; see the note at the bottom of the page for deploy steps.
+          give you a good ballpark for customers. Turn on "Use live EasyPost rates" above for real carrier rates.
         </div>`;
     }
   }
@@ -1128,6 +1602,82 @@
   // ---------- Main action ----------
 
   document.getElementById("getQuoteBtn").addEventListener("click", async function () {
+    if (shipmentTypeSelect.value === "freight") {
+      const freightInputs = {
+        pallets: Object.values(pallets),
+        unit: document.getElementById("unitSystem").value,
+        originZip: document.getElementById("originZip").value.trim(),
+        destZip: document.getElementById("destZip").value.trim(),
+        originCountry: document.getElementById("originCountry").value,
+        destCountry: document.getElementById("destCountry").value,
+        destinationType: document.getElementById("destinationType").value,
+        hazmat: document.getElementById("hazmat").checked,
+        saturday: document.getElementById("saturday").checked,
+        liftgate: document.getElementById("liftgate").checked,
+        freightClass: document.getElementById("freightClass").value,
+        nonStackable: document.getElementById("nonStackable").checked,
+        insideDelivery: document.getElementById("insideDelivery").checked,
+        limitedAccess: document.getElementById("limitedAccess").checked,
+        declaredValue: parseFloat(document.getElementById("declaredValue").value) || 0,
+        poNumber: document.getElementById("poNumber").value.trim(),
+        pickupDate: document.getElementById("pickupDate").value,
+        freightCommodity: document.getElementById("freightCommodity").value.trim()
+      };
+
+      if (!freightInputs.pallets.length) {
+        alert("Add at least one pallet before requesting a freight quote.");
+        return;
+      }
+      if (!freightInputs.originZip || !freightInputs.destZip) {
+        alert("Please enter both an origin and destination ZIP/postal code.");
+        return;
+      }
+      if (freightInputs.originCountry !== "US" || freightInputs.destCountry !== "US") {
+        alert("Freight/LTL estimates currently support U.S. domestic shipments only.");
+        return;
+      }
+      if (freightLiveModeToggle.checked && !freightInputs.pickupDate) {
+        alert("Live Warp quotes need a requested pickup date. Please fill that in, or turn off \"Use live Warp freight rates\" to use the built-in estimate instead.");
+        return;
+      }
+
+      lastInputs = freightInputs;
+
+      if (freightLiveModeToggle.checked) {
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = "Fetching live rates...";
+        try {
+          const data = await fetchFreightLiveRates(freightInputs);
+          renderFreightLiveQuotes(data, freightInputs);
+          history.unshift({
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            route: freightInputs.originZip + " -> " + freightInputs.destZip + " (freight, live)",
+            weight: freightInputs.pallets.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0),
+            cheapest: data.quotes[0].priceUsd,
+            priciest: data.quotes[data.quotes.length - 1].priceUsd
+          });
+          renderHistory();
+        } catch (err) {
+          const result = computeFreightQuote(freightInputs);
+          lastQuoteSet = result;
+          renderFreightQuotes(result);
+          prependLiveError(err.message || "Unknown error");
+          addFreightHistoryEntry(result, freightInputs);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Get shipping quote";
+        }
+        return;
+      }
+
+      const result = computeFreightQuote(freightInputs);
+      lastQuoteSet = result;
+      renderFreightQuotes(result);
+      addFreightHistoryEntry(result, freightInputs);
+      return;
+    }
+
     const inputs = {
       packages: Object.values(packages),
       unit: document.getElementById("unitSystem").value,
@@ -1157,6 +1707,10 @@
     }
     if (!inputs.originZip || !inputs.destZip) {
       alert("Please enter both an origin and destination ZIP/postal code.");
+      return;
+    }
+    if (liveModeToggle.checked && (!inputs.originCity || !inputs.destCity)) {
+      alert("Live rates need both an origin city and a destination city filled in (some carriers, like FedEx, reject requests without one). Please fill those in, or turn off \"Use live EasyPost rates\" to use the built-in estimate instead.");
       return;
     }
 
